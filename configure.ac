@@ -17,5 +17,6 @@ AC_PROG_INSTALL
 AM_PROG_CC_C_O
 
 AC_SEARCH_LIBS([sodium_init], [sodium], [], [AC_MSG_ERROR("libsodium cannot be found.")])
+AC_SEARCH_LIBS([kvm_cmd_run_init], [lkvm], [], [AC_MSG_ERROR("liblkvm cannot be found.")])
 
 AC_OUTPUT

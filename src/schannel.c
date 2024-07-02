@@ -30,6 +30,9 @@
 
 #include "schannel/schannel.h"
 
+#include <rpc/clnt.h>
+#include "realm/realm.h"
+
 
 /* A key exchange key contains two Curve25519 keys. */
 #define	SCHANNEL_KEX_PUBLEN	2*crypto_box_PUBLICKEYBYTES
@@ -54,7 +57,7 @@ struct schan_message {
 };
 
 
-bool		sign_kex(uint8_t *, uint8_t *, uint8_t *);
+bool		sign_kex_wrapper(uint8_t *, uint8_t *, uint8_t *);
 static bool	validate_keys(uint8_t *, size_t, uint8_t *, size_t);
 static void	reset_counters(struct schannel *);
 static void	initialise_schannel(struct schannel *);
@@ -67,13 +70,14 @@ static bool	unpack_message(struct schannel *, struct schan_message *,
 static bool	size_is_valid(uint32_t, size_t);
 static bool	schannel_recv_kex(struct schannel *, struct schan_message *);
 
+static CLIENT *handle;
 
 /*
  * schannel_init prepares the library for initialisation. It returns
  * true if the initialisation was successful, and false otherwise.
  */
 bool
-schannel_init(void)
+schannel_init(const char *hname, const char *kernel_path)
 {
 	struct rlimit		rlim;
 	struct schannel 	sch;
@@ -82,6 +86,21 @@ schannel_init(void)
 	if (sodium_init() == -1) {
 		return false;
 	}
+
+	server_settings settings = {
+		.hostname = hname,
+		.kernel_path = kernel_path,
+		.enable_vm_boot_output = FALSE,
+		.extra_args = 0,
+		.argv = NULL
+	};
+
+	handle = vclnt_create(&settings);
+	if(handle == NULL) {
+		perror("");
+		return -1;
+	}
+	free(settings.argv);
 
 	if (-1 == getrlimit(RLIMIT_STACK, &rlim)) {
 		return false;
@@ -212,20 +231,16 @@ generate_keypair(uint8_t *sk, uint8_t *pk)
 
 
 /*
- * sign_kex performs a signature on the key exchange if the signer is
+ * sign_kex_wrapper performs a signature on the key exchange if the signer is
  * not NULL.
  */
 bool
-sign_kex(uint8_t *public, uint8_t *signer, uint8_t *kex_sig)
+sign_kex_wrapper(uint8_t *public, uint8_t *signer, uint8_t *kex_sig)
 {
 	uint8_t	sig[2*crypto_sign_BYTES];
 	int	rv = -1;
+	str_t *res;
 
-	if (NULL == signer) {
-		return true;
-	}
-
-	assert(NULL != signer);
 	assert(NULL != public);
 	assert(NULL != kex_sig);
 #ifdef NODEBUG
@@ -233,10 +248,18 @@ sign_kex(uint8_t *public, uint8_t *signer, uint8_t *kex_sig)
 		return false;
 	}
 #endif
-	
-	rv = crypto_sign(sig, NULL, public, SCHANNEL_KEX_PUBLEN, signer);
+
+	if (handle) {
+		printf("Signing public key using enclave backend\n");
+		str_t arg = { .val = public };
+		res = sign_kex_1(&arg, handle);
+		rv = !(NULL != res);
+	} else {
+		rv = crypto_sign(sig, NULL, public, SCHANNEL_KEX_PUBLEN, signer);
+	}
+
 	if (0 == rv) {
-		memcpy(kex_sig, sig, crypto_sign_BYTES);
+		memcpy(kex_sig, res->val, crypto_sign_BYTES);
 		return true;
 	}
 	return false;
@@ -364,7 +387,7 @@ schannel_dial(struct schannel *sch, int sock, uint8_t *signer,
 		return false;
 	}
 
-	if (!sign_kex(public, signer, public+SCHANNEL_KEX_PUBLEN)) {
+	if (!sign_kex_wrapper(public, signer, public+SCHANNEL_KEX_PUBLEN)) {
 		sodium_munlock(private, SCHANNEL_KEX_PRVLEN);
 		return false;
 	}
@@ -461,7 +484,7 @@ schannel_listen(struct schannel *sch, int sock, uint8_t *signer,
 		return false;
 	}
 
-	if (!sign_kex(public, signer, public+SCHANNEL_KEX_PUBLEN)) {
+	if (!sign_kex_wrapper(public, signer, public+SCHANNEL_KEX_PUBLEN)) {
 		sodium_munlock(private, SCHANNEL_KEX_PRVLEN);
 		return false;
 	}
@@ -561,7 +584,7 @@ _schannel_send(struct schannel *sch, uint8_t mtype, uint8_t *buf, size_t buflen)
  * authenticates it, then sends it out over the channel.
  */
 bool
-schannel_send(struct schannel *sch, uint8_t *buf, size_t buflen)
+schannel_send(struct schannel *sch, const uint8_t *buf, size_t buflen)
 {
 	return _schannel_send(sch, SCHANNEL_NORMAL, buf, buflen);
 }

@@ -28,7 +28,7 @@
  * schannel_init prepares the library for initialisation. It returns
  * true if the initialisation was successful, and false otherwise.
  */
-bool	schannel_init(void);
+bool	schannel_init(const char *, const char *);
 
 
 #ifndef SCHANNEL_BUFSIZE
@@ -80,12 +80,12 @@ struct schannel {
 
 
 __BEGIN_DECLS
-bool	schannel_init(void);
+bool	schannel_init(const char *, const char *);
 bool	schannel_dial(struct schannel *, int, uint8_t *, size_t, uint8_t *,
 		      size_t);
 bool	schannel_listen(struct schannel *, int, uint8_t *, size_t, uint8_t *,
 			size_t);
-bool	schannel_send(struct schannel *, uint8_t *, size_t);
+bool	schannel_send(struct schannel *, const uint8_t *, size_t);
 uint8_t	schannel_recv(struct schannel *, uint8_t *, size_t *);
 bool	schannel_close(struct schannel *);
 void	schannel_zero(struct schannel *);

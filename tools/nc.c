@@ -189,8 +189,8 @@ static void
 sch_sender(int sockfd)
 {
 	struct schannel	 sch;
-	uint8_t		 buf[BUFSIZE];
-	size_t		 buflen = 0;	
+	const char *buf = "This message has been sent over a secure channel using enclave-backend public key signing.";
+	size_t		 buflen = strlen(buf);
 	uint8_t		*signer = NULL;
 	uint8_t		*peer = NULL;
 
@@ -219,7 +219,6 @@ sch_sender(int sockfd)
 			fprintf(stderr, "rekey complete\n");
 		}
 
-		buflen = fread(buf, 1, BUFSIZE, stdin);
 		if (0 == buflen) {
 			printf("\n");
 			printf("secure channel shutdown\n");
@@ -228,7 +227,7 @@ sch_sender(int sockfd)
 			exit(EXIT_SUCCESS);
 		}
 
-		if (!schannel_send(&sch, buf, buflen)) {
+		if (!schannel_send(&sch, (const uint8_t *)buf, buflen)) {
 			zero_identity();
 			errx(EXIT_FAILURE, "schannel_send failed.");
 		}
@@ -378,7 +377,7 @@ main(int argc, char *argv[])
 		errx(EXIT_FAILURE, "Need %d arguments.", reqd);
 	}
 
-	if (!schannel_init()) {
+	if (!schannel_init("12:1234", "~/uni/4year/thesis/demo/output/kImage")) {
 		errx(EXIT_FAILURE, "Failed to initialise schannel.");
 	}
 
