@@ -87,20 +87,22 @@ schannel_init(const char *hname, const char *kernel_path)
 		return false;
 	}
 
-	server_settings settings = {
-		.hostname = hname,
-		.kernel_path = kernel_path,
-		.enable_vm_boot_output = FALSE,
-		.extra_args = 0,
-		.argv = NULL
-	};
+	if (NULL != hname) {
+		server_settings settings = {
+			.hostname = hname,
+			.kernel_path = kernel_path,
+			.enable_vm_boot_output = FALSE,
+			.extra_args = 0,
+			.argv = NULL
+		};
 
-	handle = vclnt_create(&settings);
-	if(handle == NULL) {
-		perror("");
-		return -1;
+		handle = vclnt_create(&settings);
+		if(handle == NULL) {
+			perror("");
+			return -1;
+		}
+		free(settings.argv);
 	}
-	free(settings.argv);
 
 	if (-1 == getrlimit(RLIMIT_STACK, &rlim)) {
 		return false;
@@ -250,18 +252,22 @@ sign_kex_wrapper(uint8_t *public, uint8_t *signer, uint8_t *kex_sig)
 #endif
 
 	if (handle) {
-		printf("Signing public key using enclave backend\n");
-		str_t arg = { .val = public };
+		str_t arg = { .str_t_val = public, .str_t_len = SCHANNEL_KEX_PUBLEN };
 		res = sign_kex_1(&arg, handle);
-		rv = !(NULL != res);
+		printf("Signing public key using enclave backend.\n");
+		if (NULL != res->str_t_val) {
+			memcpy(kex_sig, res->str_t_val, crypto_sign_BYTES);
+			return true;
+		}
 	} else {
 		rv = crypto_sign(sig, NULL, public, SCHANNEL_KEX_PUBLEN, signer);
+		printf("Signing public key usually.\n");
+		if (0 == rv) {
+			memcpy(kex_sig, sig, crypto_sign_BYTES);
+			return true;
+		}
 	}
 
-	if (0 == rv) {
-		memcpy(kex_sig, res->val, crypto_sign_BYTES);
-		return true;
-	}
 	return false;
 }
 
@@ -284,13 +290,18 @@ verify_kex(uint8_t *peer_public, uint8_t *peer)
 		return false;
 	}
 #endif 
-
+	// printf("here 1 %p %p %d %p\n", peer_public+SCHANNEL_KEX_PUBLEN,
+					    //  peer_public, SCHANNEL_KEX_PUBLEN,
+					    //  peer);
 	if (0 != crypto_sign_verify_detached(peer_public+SCHANNEL_KEX_PUBLEN,
 					     peer_public, SCHANNEL_KEX_PUBLEN,
 					     peer))
 	{
 		return false;
 	}
+	// printf("here 2 %p %p %d %p\n", peer_public+SCHANNEL_KEX_PUBLEN,
+					    //  peer_public, SCHANNEL_KEX_PUBLEN,
+					    //  peer);
 	
 	return true;
 }
@@ -376,27 +387,32 @@ schannel_dial(struct schannel *sch, int sock, uint8_t *signer,
 	if (!validate_keys(signer, signer_len, peer, peer_len)) {
 		return false;
 	}
+	// printf("here 1\n");
 
 	initialise_schannel(sch);
 	if (-1 == sodium_mlock(private, SCHANNEL_KEX_PRVLEN)) {
 		return false;
 	}
+	// printf("here 2\n");
 
 	if (!generate_keypair(private, public)) {
 		sodium_munlock(private, SCHANNEL_KEX_PRVLEN);
 		return false;
 	}
+	// printf("here 3\n");
 
 	if (!sign_kex_wrapper(public, signer, public+SCHANNEL_KEX_PUBLEN)) {
 		sodium_munlock(private, SCHANNEL_KEX_PRVLEN);
 		return false;
 	}
+	// printf("here 4\n");
 	
 	datalen = send(sock, public, SCHANNEL_KEX_PUBLEN+SCHANNEL_SIGSIZE, 0);
 	if (SCHANNEL_KEX_PUBLEN+SCHANNEL_SIGSIZE != datalen) {
 		sodium_munlock(private, SCHANNEL_KEX_PRVLEN);
 		return false;
 	}
+	// printf("here 5\n");
 
 	datalen = recv(sock, peer_public, SCHANNEL_KEX_PUBLEN+
 	    SCHANNEL_SIGSIZE, 0);
@@ -404,22 +420,26 @@ schannel_dial(struct schannel *sch, int sock, uint8_t *signer,
 		sodium_munlock(private, SCHANNEL_KEX_PRVLEN);
 		return false;
 	}
+	// printf("here 6\n");
 	
 	if (!verify_kex(peer_public, peer)) {
 		sodium_munlock(private, SCHANNEL_KEX_PRVLEN);
 		return false;
 	}
+	// printf("here 7\n");
 
 	if (-1 == sodium_mlock(sch->skey, SCHANNEL_KEYSIZE)) {
 		sodium_munlock(private, SCHANNEL_KEX_PRVLEN);
 		return false;
 	}
+	// printf("here 8\n");
 
 	if (-1 == sodium_mlock(sch->rkey, SCHANNEL_KEYSIZE)) {
 		sodium_munlock(private, SCHANNEL_KEX_PRVLEN);
 		sodium_munlock(sch->skey, SCHANNEL_KEYSIZE);
 		return false;
 	}
+	// printf("here 9\n");
 
 	if (!do_kex(sch, private, peer_public, true)) {
 		sodium_munlock(private, SCHANNEL_KEX_PRVLEN);
@@ -427,6 +447,7 @@ schannel_dial(struct schannel *sch, int sock, uint8_t *signer,
 		sodium_munlock(sch->rkey, SCHANNEL_KEYSIZE);
 		return false;
 	}
+	// printf("here 10\n");
 	
 	sodium_munlock(private, SCHANNEL_KEX_PRVLEN);
 	sch->sockfd = sock;

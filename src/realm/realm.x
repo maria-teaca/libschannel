@@ -1,6 +1,4 @@
-struct str_t {
-    string val<>;
-};
+typedef opaque str_t<128>;
 
 program SCHANNEL_PROG {
     version SCHANNEL_VERS {

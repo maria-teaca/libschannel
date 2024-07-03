@@ -41,11 +41,13 @@ read_key()
 
 str_t * sign_kex_1_svc(str_t *arg, struct svc_req *) {
 	static str_t res;
-	int rv;
+	unsigned long long len;
 
-	while (!res.val) res.val = calloc(crypto_sign_ed25519_BYTES, sizeof(char));
+	while (!res.str_t_val) res.str_t_val = calloc(crypto_sign_ed25519_BYTES, sizeof(char));
 
-	rv = crypto_sign(res.val, NULL, arg->val, 2*crypto_box_PUBLICKEYBYTES, key);
+	crypto_sign((uint8_t *)res.str_t_val, &len,
+		(uint8_t *)arg->str_t_val, 2*crypto_box_PUBLICKEYBYTES, (uint8_t *)key);
+	res.str_t_len = len;
 
 	return &res;
 }

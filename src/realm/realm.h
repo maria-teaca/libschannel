@@ -14,10 +14,10 @@ extern "C" {
 #endif
 
 
-struct str_t {
-	char *val;
-};
-typedef struct str_t str_t;
+typedef struct {
+	u_int str_t_len;
+	char *str_t_val;
+} str_t;
 
 #define SCHANNEL_PROG 0x0
 #define SCHANNEL_VERS 1

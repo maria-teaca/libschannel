@@ -33,7 +33,7 @@ compile
 *.lo
 
 schannel_keygen
-schannel_nc
+schannel_nc*
 
 realm_server
 

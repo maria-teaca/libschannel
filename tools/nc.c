@@ -377,7 +377,8 @@ main(int argc, char *argv[])
 		errx(EXIT_FAILURE, "Need %d arguments.", reqd);
 	}
 
-	if (!schannel_init("12:1234", "~/uni/4year/thesis/demo/output/kImage")) {
+	if (!schannel_init(NULL, NULL)) {
+	// if (!schannel_init("12:1234", "/home/maria-teaca/uni/4year/thesis/demo/output/kImage")) {
 		errx(EXIT_FAILURE, "Failed to initialise schannel.");
 	}
 
